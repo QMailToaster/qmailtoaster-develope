@@ -40,6 +40,7 @@ if [ -f $tempdir/$pkg/$pkg.spec ]; then
   gspecdir=$tempdir/$pkg
 else
   cd $tempdir
+  rm -rf $tempdir/$pkg
   git clone $github/pkgs/$pkg
   cd $savepwd
   if [ -f $tempdir/pkgs/$pkg/$pkg.spec ]; then
@@ -74,13 +75,16 @@ release=${relstring%\%\{?dist\}}$repotag
 a4_get_external_sources(){
 
 while read srctag srcval anythingleft; do
+# this loop is done at least once even with no input, for some reason
+  if [ -z "$srcval" ]; then
+    break
+  fi
   srcurl=$(echo $srcval | sed -e "s|%{name}|$pkg|" -e "s|%{version}|$version|")
   srcname=${srcurl##*/}
   srcloc=${srcurl%/${srcname}}
   srcloc=${srcloc#*//}
   srcfile=$sourcedir/$srcname
   if [ ! -f "$srcfile" ] && [ ! -f $gspecdir/$srcname ]; then
-    rm -f $srcfile
     wget $srcurl -O "$srcfile"
   fi
 done <<!EOF!
@@ -132,8 +136,8 @@ myver=v1.0
 # find the package .spec file
 if [ -z "$1" ]; then
   herespec=$(ls *.spec 2>&1)
-  if [ "$(echo $herespec | wc)" == "1" ]; then
-    pkg=$(herespec%.spec)
+  if [ "$(echo $herespec | wc -w)" == "1" ]; then
+    pkg=${herespec%.spec}
   else
     echo "$me what? (no .spec file here)"
     exit 1
