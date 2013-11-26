@@ -7,22 +7,47 @@
 # 11/25/13 shubes - created
 ######################################################################
 
-# change mygithub appropriately. Nothing else should be changed.
+# change these 2 variables appropriately. Nothing else should be changed.
 mygithub=~/github
+mygpgpass="use your gpg key pass"
 
 ######################################################################
-# get RPM environment variables
+# clone the git repo to a temporary directory
 #
-a2_determine_current_version_release(){
+a2_clone_git_to_temp(){
 
-if [ -f "$mygithub/$pkg/$pkg.spec" ]; then
-  gspecdir=$mygithub/$pkg
-elif [ -f "$mygithub/pkgs/$pkg/$pkg.spec" ]; then
-  gspecdir=$mygithub/pkgs/$pkg
+# set a temp dir for the working scratch. $$ is the current shell ID.
+tempdir=$(tempfile 2>/dev/null) || tempdir=/tmp/$me.$$
+
+# make sure the tempdir is deleted when we're done
+#trap "rm -rf $tempdir" 0 1 2 5 15
+
+mkdir $tempdir
+# git 1.8.5 will have a -C option. 'til then, we need to cd to the target
+savepwd=$PWD
+cd $tempdir
+git clone $github/$pkg
+cd $savepwd
+
+if [ -f $tempdir/$pkg/$pkg.spec ]; then
+  gspecdir=$tempdir/$pkg
 else
-  echo "$me - $pkg not found in $mygithub or $mygithub/pkgs"
-  exit 1
+  cd $tempdir
+  git clone $github/pkgs/$pkg
+  cd $savepwd
+  if [ -f $tempdir/pkgs/$pkg/$pkg.spec ]; then
+    gspecdir=$tempdir/pkgs/$pkg
+  else
+    echo "$me - unable to clone git repo - terminating"
+    exit 1
+  fi
 fi
+}
+
+######################################################################
+# get variables from the spec file
+#
+a3_determine_current_version_release(){
 
 specfile=$gspecdir/$pkg.spec
 
@@ -37,7 +62,7 @@ release=${relstring%\%\{?dist\}}$repotag
 }
 
 ######################################################################
-# wget sources from their internet locations
+# wget sources not in the git spec repo from their internet locations
 #
 a4_get_external_sources(){
 
@@ -47,7 +72,7 @@ while read srctag srcval anythingleft; do
   srcloc=${srcurl%/${srcname}}
   srcloc=${srcloc#*//}
   srcfile=$sourcedir/$srcname
-  if [ "$srcloc" != "$rawgit/$pkg" ] || [ ! -f $gspecdir/$srcname ]; then
+  if [ ! -f "$srcfile" ] && [ ! -f $gspecdir/$srcname ]; then
     rm -f $srcfile
     wget $srcurl -O "$srcfile"
   fi
@@ -58,18 +83,43 @@ $(grep "^Source[0-9]*:" $specfile)
 
 ######################################################################
 # Copy files in local git directory to SOURCES
-# I'd like to get these from github, but that doesn't preserve time stamps
-# There's no assurance that what's local gets pushed to the repo
 #
 a6_copy_local_git_files(){
 
 for srcname in $(ls $gspecdir); do
-  if [ "$srcname" != "$pkg.spec" ]; then
-    srcfile=$sourcedir/$srcname
-    rm -f $srcfile
-    cp -p $gspecdir/$srcname $srcfile
-  fi
+  case "$srcname" in
+    "$pkg.spec" | "README.md" )
+      :
+      ;;
+    * )
+      srcfile=$sourcedir/$srcname
+      rm -f $srcfile
+      cp -p $gspecdir/$srcname $srcfile
+  esac
 done
+}
+
+######################################################################
+# invoke expect script to sign build and sign script with no pw prompt
+#
+a8_build_signed_rpm(){
+
+# set a temp dir for the working scratch. $$ is the current shell ID.
+tempfile=$(tempfile 2>/dev/null) || tempfile=/tmp/$me.$myver.$$
+
+# make sure the tempfile is deleted when we're done
+#trap "rm -f $tempfile" 0 1 2 5 15
+
+cat <<!EOF! >>$tempfile
+set repo "dist $repotag"
+set specfile "$specfile"
+spawn rpmbuild -bs --define "\$repo" --sign \$specfile
+expect "phrase:"
+send "$mygpgpass\r"
+interact
+!EOF!
+
+expect -f $tempfile
 }
 
 ######################################################################
@@ -78,33 +128,42 @@ done
 me=${0##*/}
 myver=v1.0
 
+# find the package .spec file
 if [ -z "$1" ]; then
-  echo "$me usage: $me <package-name>"
+  herespec=$(ls *.spec 2>&1)
+  if [ "$(echo $herespec | wc)" == "1" ]; then
+    pkg=$(herespec%.spec)
+  else
+    echo "$me what? (no .spec file here)"
+    exit 1
+  fi
+elif [ -f "$mygithub/$1/$1.spec" ]; then
+  pkg=$1
+elif [ -f "$mygithub/pkgs/$1/$1.spec" ]; then
+  pkg=$1
+else
+  echo "$me - $pkg not found"
   exit 1
 fi
 
-pkg=$1
-
 repotag=.qt
-rawgit=raw.github.com/QMailToaster/pkgs/master
+github=https://github.com/QMailToaster
 sourcedir=$(rpm --eval='%{_sourcedir}')
 srcrpmdir=$(rpm --eval='%{_srcrpmdir}')
 
-a2_determine_current_version_release
+a2_clone_git_to_temp
+
+a3_determine_current_version_release
 
 echo "$me - $pkg version-release is $version-$release"
 
-srcrpm="$sourcedir/$pkg-$version-$release.src.rpm"
-
+srcrpm="$srcrpmdir/$pkg-$version-$release.src.rpm"
 if [ -f "$srcrpm" ]; then
-  echo "$me - $srcrpm exists, I'll use it for starters"
   rpm -ivh "$srcrpm"
-else
-  a4_get_external_sources
 fi
+
+a4_get_external_sources
 
 a6_copy_local_git_files
 
-rpmbuild -bs --define "dist $repotag" --sign $specfile
-
-exit 0
+a8_build_signed_rpm
