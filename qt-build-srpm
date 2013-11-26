@@ -1,0 +1,110 @@
+#!/bin/bash
+# Copyright (C) 2009-2013 Eric Shubert <eric@datamatters.us>
+#
+# Build QMailToaster srpm file
+######################################################################
+# Change Log
+# 11/25/13 shubes - created
+######################################################################
+
+# change mygithub appropriately. Nothing else should be changed.
+mygithub=~/github
+
+######################################################################
+# get RPM environment variables
+#
+a2_determine_current_version_release(){
+
+if [ -f "$mygithub/$pkg/$pkg.spec" ]; then
+  gspecdir=$mygithub/$pkg
+elif [ -f "$mygithub/pkgs/$pkg/$pkg.spec" ]; then
+  gspecdir=$mygithub/pkgs/$pkg
+else
+  echo "$me - $pkg not found in $mygithub or $mygithub/pkgs"
+  exit 1
+fi
+
+specfile=$gspecdir/$pkg.spec
+
+read vertag version anythingleft <<!EOF!
+$(grep --max-count=1 "^Version:" $specfile)
+!EOF!
+
+read reltag relstring anythingleft <<!EOF!
+$(grep --max-count=1 "^Release:" $specfile)
+!EOF!
+release=${relstring%\%\{?dist\}}$repotag
+}
+
+######################################################################
+# wget sources from their internet locations
+#
+a4_get_external_sources(){
+
+while read srctag srcval anythingleft; do
+  srcurl=$(echo $srcval | sed -e "s|%{name}|$pkg|" -e "s|%{version}|$version|")
+  srcname=${srcurl##*/}
+  srcloc=${srcurl%/${srcname}}
+  srcloc=${srcloc#*//}
+  srcfile=$sourcedir/$srcname
+  if [ "$srcloc" != "$rawgit/$pkg" ] || [ ! -f $gspecdir/$srcname ]; then
+    rm -f $srcfile
+    wget $srcurl -O "$srcfile"
+  fi
+done <<!EOF!
+$(grep "^Source[0-9]*:" $specfile)
+!EOF!
+}
+
+######################################################################
+# Copy files in local git directory to SOURCES
+# I'd like to get these from github, but that doesn't preserve time stamps
+# There's no assurance that what's local gets pushed to the repo
+#
+a6_copy_local_git_files(){
+
+for srcname in $(ls $gspecdir); do
+  if [ "$srcname" != "$pkg.spec" ]; then
+    srcfile=$sourcedir/$srcname
+    rm -f $srcfile
+    cp -p $gspecdir/$srcname $srcfile
+  fi
+done
+}
+
+######################################################################
+# main routine begins here
+#
+me=${0##*/}
+myver=v1.0
+
+if [ -z "$1" ]; then
+  echo "$me usage: $me <package-name>"
+  exit 1
+fi
+
+pkg=$1
+
+repotag=.qt
+rawgit=raw.github.com/QMailToaster/pkgs/master
+sourcedir=$(rpm --eval='%{_sourcedir}')
+srcrpmdir=$(rpm --eval='%{_srcrpmdir}')
+
+a2_determine_current_version_release
+
+echo "$me - $pkg version-release is $version-$release"
+
+srcrpm="$sourcedir/$pkg-$version-$release.src.rpm"
+
+if [ -f "$srcrpm" ]; then
+  echo "$me - $srcrpm exists, I'll use it for starters"
+  rpm -ivh "$srcrpm"
+else
+  a4_get_external_sources
+fi
+
+a6_copy_local_git_files
+
+rpmbuild -bs --define "dist $repotag" --sign $specfile
+
+exit 0
