@@ -12,15 +12,22 @@ mygithub=~/github
 mygpgpass="use your gpg key pass"
 
 ######################################################################
+# setup temp directory and file
+#
+a1_setup_temp_stuff(){
+
+# set a temp dir for the working scratch. $$ is the current shell ID.
+tempdir=$(tempfile 2>/dev/null)  || tempdir=/tmp/$me.$$
+tempfile=$(tempfile 2>/dev/null) || tempfile=/tmp/$me.$myver.$$
+
+# make sure the tempdir is deleted when we're done
+trap "rm -rf $tempdir $tempfile" 0 1 2 5 15
+}
+
+######################################################################
 # clone the git repo to a temporary directory
 #
 a2_clone_git_to_temp(){
-
-# set a temp dir for the working scratch. $$ is the current shell ID.
-tempdir=$(tempfile 2>/dev/null) || tempdir=/tmp/$me.$$
-
-# make sure the tempdir is deleted when we're done
-#trap "rm -rf $tempdir" 0 1 2 5 15
 
 mkdir $tempdir
 # git 1.8.5 will have a -C option. 'til then, we need to cd to the target
@@ -104,12 +111,6 @@ done
 #
 a8_build_signed_rpm(){
 
-# set a temp dir for the working scratch. $$ is the current shell ID.
-tempfile=$(tempfile 2>/dev/null) || tempfile=/tmp/$me.$myver.$$
-
-# make sure the tempfile is deleted when we're done
-#trap "rm -f $tempfile" 0 1 2 5 15
-
 cat <<!EOF! >>$tempfile
 set repo "dist $repotag"
 set specfile "$specfile"
@@ -150,6 +151,8 @@ repotag=.qt
 github=https://github.com/QMailToaster
 sourcedir=$(rpm --eval='%{_sourcedir}')
 srcrpmdir=$(rpm --eval='%{_srcrpmdir}')
+
+a1_setup_temp_stuff
 
 a2_clone_git_to_temp
 
