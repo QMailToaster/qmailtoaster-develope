@@ -39,16 +39,8 @@ cd $savepwd
 if [ -f $tempdir/$pkg/$pkg.spec ]; then
   gspecdir=$tempdir/$pkg
 else
-  cd $tempdir
-  rm -rf $tempdir/$pkg
-  git clone $github/pkgs/$pkg
-  cd $savepwd
-  if [ -f $tempdir/pkgs/$pkg/$pkg.spec ]; then
-    gspecdir=$tempdir/pkgs/$pkg
-  else
-    echo "$me - unable to clone git repo - terminating"
-    exit 1
-  fi
+  echo "$me - unable to clone git repo - terminating"
+  exit 1
 fi
 }
 
@@ -111,7 +103,7 @@ done
 }
 
 ######################################################################
-# invoke expect script to sign build and sign script with no pw prompt
+# build and invoke expect script to build and sign src.rpm with no prompt
 #
 a8_build_signed_rpm(){
 
@@ -174,3 +166,5 @@ a4_get_external_sources
 a6_copy_local_git_files
 
 a8_build_signed_rpm
+
+#a9_scp_rpm_to_staging
