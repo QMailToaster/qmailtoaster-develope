@@ -4,6 +4,9 @@
 # Build QMailToaster srpm file
 ######################################################################
 # Change Log
+# 11/28/13 shubes - modified to use gspecdir as rpmbuild/SOURCES
+#                 - added spectool for obtaining external sources
+#                 - refactored a bit
 # 11/25/13 shubes - created
 ######################################################################
 
@@ -12,44 +15,43 @@ mygithub=~/github
 mygpgpass="use your gpg key pass"
 
 ######################################################################
-# setup temp directory and file
+# set tempgit and tempfile names.
+# tempgit is for the git clone, and tempfile is for executing expect
 #
 a1_setup_temp_stuff(){
 
-# set a temp dir for the working scratch. $$ is the current shell ID.
-tempdir=$(tempfile 2>/dev/null)  || tempdir=/tmp/$me.$$
 tempfile=$(tempfile 2>/dev/null) || tempfile=/tmp/$me.$myver.$$
+tempgit=$(tempfile 2>/dev/null)  || tempgit=/tmp/$me.$$
 
-# make sure the tempdir is deleted when we're done
-trap "rm -rf $tempdir $tempfile" 0 1 2 5 15
+# make sure the temp stuff is deleted when we're done
+trap "rm -rf $tempgit $tempfile" 0 1 2 5 15
 }
 
 ######################################################################
-# clone the git repo to a temporary directory
+# clone the git repo to a temporary directory,
 #
 a2_clone_git_to_temp(){
 
-mkdir $tempdir
+mkdir $tempgit
 # git 1.8.5 will have a -C option. 'til then, we need to cd to the target
 savepwd=$PWD
-cd $tempdir
-git clone $github/$pkg
+cd $tempgit
+git clone https://github.com/QMailToaster/$pkg
 cd $savepwd
 
-if [ -f $tempdir/$pkg/$pkg.spec ]; then
-  gspecdir=$tempdir/$pkg
-else
+gspecdir=$tempgit/$pkg
+specfile=$gspecdir/$pkg.spec
+
+if [ ! -f "$specfile" ]; then
   echo "$me - unable to clone git repo - terminating"
   exit 1
 fi
 }
 
 ######################################################################
-# get variables from the spec file
+# use an existing src rpm file if one exists
 #
-a3_determine_current_version_release(){
-
-specfile=$gspecdir/$pkg.spec
+a4_use_existing_src_rpm(){
 
 read vertag version anythingleft <<!EOF!
 $(grep --max-count=1 "^Version:" $specfile)
@@ -58,48 +60,36 @@ $(grep --max-count=1 "^Version:" $specfile)
 read reltag relstring anythingleft <<!EOF!
 $(grep --max-count=1 "^Release:" $specfile)
 !EOF!
-release=${relstring%\%\{?dist\}}$repotag
+release=$(echo $relstring | sed -e "s|%{?dist}|$repotag|")
+
+srcrpmname=$pkg-$version-$release.src.rpm
+srcrpm=$(rpm --eval='%{_srcrpmdir}')/$srcrpmname
+if [ -f "$srcrpm" ]; then
+  rpm -ivh --define "_sourcedir $gspecdir" $srcrpm
+fi
 }
 
 ######################################################################
-# wget sources not in the git spec repo from their internet locations
+# get sources from their internet locations
+# we bypass getting files we already have from the src rpm file
 #
-a4_get_external_sources(){
+a6_get_external_sources(){
 
 while read srctag srcval anythingleft; do
-# this loop is done at least once even with no input, for some reason
+# this loop is done at least once even with no input
+# it appears that read does not treat a single \n as EOF
   if [ -z "$srcval" ]; then
     break
   fi
-  srcurl=$(echo $srcval | sed -e "s|%{name}|$pkg|" -e "s|%{version}|$version|")
-  srcname=${srcurl##*/}
-  srcloc=${srcurl%/${srcname}}
-  srcloc=${srcloc#*//}
-  srcfile=$sourcedir/$srcname
-  if [ ! -f "$srcfile" ] && [ ! -f $gspecdir/$srcname ]; then
-    wget $srcurl -O "$srcfile"
+  if [ ! -f "$gspecdir/${srcval##*/}" ]; then
+    srcstring=${srctag%:}
+    srcnum=${srcstring#Source}
+    echo "$me getting source $srcnum"
+    spectool --get-files -C $gspecdir --source $srcnum $specfile
   fi
 done <<!EOF!
-$(grep "^Source[0-9]*:" $specfile)
+$(spectool --list-files $specfile)
 !EOF!
-}
-
-######################################################################
-# Copy files in local git directory to SOURCES
-#
-a6_copy_local_git_files(){
-
-for srcname in $(ls $gspecdir); do
-  case "$srcname" in
-    "$pkg.spec" | "README.md" )
-      :
-      ;;
-    * )
-      srcfile=$sourcedir/$srcname
-      rm -f $srcfile
-      cp -p $gspecdir/$srcname $srcfile
-  esac
-done
 }
 
 ######################################################################
@@ -109,8 +99,9 @@ a8_build_signed_rpm(){
 
 cat <<!EOF! >>$tempfile
 set repo "dist $repotag"
+set source "_sourcedir $gspecdir"
 set specfile "$specfile"
-spawn rpmbuild -bs --define "\$repo" --sign \$specfile
+spawn rpmbuild -bs --define "\$repo" --define "\$source" --sign \$specfile
 expect "phrase:"
 send "$mygpgpass\r"
 interact
@@ -123,7 +114,7 @@ expect -f $tempfile
 # main routine begins here
 #
 me=${0##*/}
-myver=v1.0
+myver=v1.1
 
 # find the package .spec file
 if [ -z "$1" ]; then
@@ -136,35 +127,19 @@ if [ -z "$1" ]; then
   fi
 elif [ -f "$mygithub/$1/$1.spec" ]; then
   pkg=$1
-elif [ -f "$mygithub/pkgs/$1/$1.spec" ]; then
-  pkg=$1
 else
   echo "$me - $pkg not found"
   exit 1
 fi
 
 repotag=.qt
-github=https://github.com/QMailToaster
-sourcedir=$(rpm --eval='%{_sourcedir}')
-srcrpmdir=$(rpm --eval='%{_srcrpmdir}')
 
 a1_setup_temp_stuff
 
 a2_clone_git_to_temp
 
-a3_determine_current_version_release
+a4_use_existing_src_rpm
 
-echo "$me - $pkg version-release is $version-$release"
-
-srcrpm="$srcrpmdir/$pkg-$version-$release.src.rpm"
-if [ -f "$srcrpm" ]; then
-  rpm -ivh "$srcrpm"
-fi
-
-a4_get_external_sources
-
-a6_copy_local_git_files
+a6_get_external_sources
 
 a8_build_signed_rpm
-
-#a9_scp_rpm_to_staging
