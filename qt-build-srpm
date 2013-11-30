@@ -4,6 +4,7 @@
 # Build QMailToaster srpm file
 ######################################################################
 # Change Log
+# 11/29/13 shubes - modified to copy resulting src.rpm to repo staging
 # 11/28/13 shubes - modified to use gspecdir as rpmbuild/SOURCES
 #                 - added spectool for obtaining external sources
 #                 - refactored a bit
@@ -13,6 +14,7 @@
 # change these 2 variables appropriately. Nothing else should be changed.
 mygithub=~/github
 mygpgpass="use your gpg key pass"
+myrepouser=shubes-stage
 
 ######################################################################
 # set tempgit and tempfile names.
@@ -133,6 +135,8 @@ else
 fi
 
 repotag=.qt
+repohost=masterepo.qmailtoaster.com
+repostage=/stage/testing/SRPMS/.
 
 a1_setup_temp_stuff
 
@@ -143,3 +147,11 @@ a4_use_existing_src_rpm
 a6_get_external_sources
 
 a8_build_signed_rpm
+
+if [ -f "$srcrpm" ]; then
+  scp -p -P 17132 $srcrpm $myrepouser@$repohost:$repostage 2>/dev/null
+  exit 0
+else
+  echo "$me - $srcrpm not found, not copied to repo staging"
+  exit 1
+fi
