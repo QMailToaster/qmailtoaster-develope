@@ -11,7 +11,7 @@
 # 11/25/13 shubes - created
 ######################################################################
 
-# change these 2 variables appropriately. Nothing else should be changed.
+# change my* variables appropriately. Nothing else should be changed.
 mygithub=~/github
 mygpgpass="use your gpg key pass"
 myrepouser=shubes-stage
