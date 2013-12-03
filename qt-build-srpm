@@ -10,6 +10,10 @@
 #                 - added spectool for obtaining external sources
 #                 - refactored a bit
 # 11/25/13 shubes - created
+# TODOs:
+# .) check mygithub for uncommitted changes
+# .) check mygithub SHA against lastest SHA on github.com
+#    e.g. https://api.github.com/repos/QmailToaster/qmailtoaster-build/commits
 ######################################################################
 
 # change my* variables appropriately. Nothing else should be changed.
