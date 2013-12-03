@@ -1,9 +1,0 @@
-#!/usr/bin/expect
-# script for signing rpms without being prompted for the key password
-# http://n8wood.wordpress.com/2009/04/06/automating-pass-phrase-signings-with-expect/
-
-spawn rpm --addsign [lindex $argv 0]
-set pass "use-your-password"
-expect "phrase:"
-send "$pass\r"
-interact
