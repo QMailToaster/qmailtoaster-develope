@@ -4,6 +4,7 @@
 # Build QMailToaster srpm file
 ######################################################################
 # Change Log
+# 12/02/13 shubes - fixed up 'expect' code
 # 11/29/13 shubes - modified to copy resulting src.rpm to repo staging
 # 11/28/13 shubes - modified to use gspecdir as rpmbuild/SOURCES
 #                 - added spectool for obtaining external sources
@@ -17,16 +18,14 @@ mygpgpass="use your gpg key pass"
 myrepouser=shubes-stage
 
 ######################################################################
-# set tempgit and tempfile names.
-# tempgit is for the git clone, and tempfile is for executing expect
+# set tempgit name for the git clone
 #
 a1_setup_temp_stuff(){
 
-tempfile=$(tempfile 2>/dev/null) || tempfile=/tmp/$me.$myver.$$
 tempgit=$(tempfile 2>/dev/null)  || tempgit=/tmp/$me.$$
 
 # make sure the temp stuff is deleted when we're done
-trap "rm -rf $tempgit $tempfile" 0 1 2 5 15
+trap "rm -rf $tempgit" 0 1 2 5 15
 }
 
 ######################################################################
@@ -99,17 +98,13 @@ $(spectool --list-files $specfile)
 #
 a8_build_signed_rpm(){
 
-cat <<!EOF! >>$tempfile
-set repo "dist $repotag"
-set source "_sourcedir $gspecdir"
-set specfile "$specfile"
-spawn rpmbuild -bs --define "\$repo" --define "\$source" --sign \$specfile
-expect "phrase:"
-send "$mygpgpass\r"
-interact
-!EOF!
-
-expect -f $tempfile
+expect -c "
+  set timeout -1
+  spawn rpmbuild -bs --define \"dist $repotag\" --define \"_sourcedir $gspecdir\" --sign $specfile
+  expect {
+    phrase:  { send \"$mygpgpass\r\"; exp_continue }
+  }
+"
 }
 
 ######################################################################
