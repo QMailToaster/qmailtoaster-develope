@@ -4,6 +4,7 @@
 # Build QMailToaster srpm file
 ######################################################################
 # Change Log
+# 12/03/13 shubes - removed win32 from clamav source
 # 12/02/13 shubes - fixed up 'expect' code
 # 11/29/13 shubes - modified to copy resulting src.rpm to repo staging
 # 11/28/13 shubes - modified to use gspecdir as rpmbuild/SOURCES
@@ -98,6 +99,24 @@ $(spectool --list-files $specfile)
 }
 
 ######################################################################
+# remove 95M of win32 from clamav tarball
+#
+a7_trim_clamav(){
+
+if [ "$pkg" == clamav ]; then
+  if [ -f "$gspecdir/clamav-$version.tar.gz" ]; then
+    tar -C $gspecdir -xzf $gspecdir/clamav-$version.tar.gz
+    rm -rf $gspecdir/clamav-$version/win32
+    tar -C $gspecdir -czf $gspecdir/clamav-$version.tar.gz clamav-$version
+  else
+    echo "$me - $gspecdir/clamav-$version.tar.gz not found"
+    ls $gspecdir
+    exit 1
+  fi
+fi
+}
+
+######################################################################
 # build and invoke expect script to build and sign src.rpm with no prompt
 #
 a8_build_signed_rpm(){
@@ -144,6 +163,8 @@ a2_clone_git_to_temp
 a4_use_existing_src_rpm
 
 a6_get_external_sources
+
+a7_trim_clamav
 
 a8_build_signed_rpm
 
