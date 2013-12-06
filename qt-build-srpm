@@ -4,6 +4,7 @@
 # Build QMailToaster srpm file
 ######################################################################
 # Change Log
+# 12/05/13 shubes - added multiple specs per repo for qmailadmin-spambox
 # 12/03/13 shubes - removed win32 from clamav source
 # 12/02/13 shubes - fixed up 'expect' code
 # 11/29/13 shubes - modified to copy resulting src.rpm to repo staging
@@ -36,7 +37,7 @@ trap "rm -rf $tempgit" 0 1 2 5 15
 ######################################################################
 # clone the git repo to a temporary directory,
 #
-a2_clone_git_to_temp(){
+a3_clone_git_to_temp(){
 
 mkdir $tempgit
 # git 1.8.5 will have a -C option. 'til then, we need to cd to the target
@@ -46,9 +47,8 @@ git clone https://github.com/QMailToaster/$pkg
 cd $savepwd
 
 gspecdir=$tempgit/$pkg
-specfile=$gspecdir/$pkg.spec
 
-if [ ! -f "$specfile" ]; then
+if [ ! -f "$gspecdir/$pkg.spec" ]; then
   echo "$me - unable to clone git repo - terminating"
   exit 1
 fi
@@ -57,7 +57,29 @@ fi
 ######################################################################
 # use an existing src rpm file if one exists
 #
-a4_use_existing_src_rpm(){
+
+a5_create_src_rpm(){
+
+b52_use_existing_src_rpm
+
+b54_get_external_sources
+
+b56_trim_clamav
+
+b58_build_signed_rpm
+
+if [ -f "$srcrpm" ]; then
+  scp -p -P 17132 $srcrpm $myrepouser@$repohost:$repostage 2>/dev/null
+else
+  echo "$me - $srcrpm not found, not copied to repo staging"
+  exit 1
+fi
+}
+
+######################################################################
+# use an existing src rpm file if one exists
+#
+b52_use_existing_src_rpm(){
 
 read vertag version anythingleft <<!EOF!
 $(grep --max-count=1 "^Version:" $specfile)
@@ -79,7 +101,7 @@ fi
 # get sources from their internet locations
 # we bypass getting files we already have from the src rpm file
 #
-a6_get_external_sources(){
+b54_get_external_sources(){
 
 while read srctag srcval anythingleft; do
 # this loop is done at least once even with no input
@@ -101,7 +123,7 @@ $(spectool --list-files $specfile)
 ######################################################################
 # remove 95M of win32 from clamav tarball
 #
-a7_trim_clamav(){
+b56_trim_clamav(){
 
 if [ "$pkg" == clamav ]; then
   if [ -f "$gspecdir/clamav-$version.tar.gz" ]; then
@@ -119,7 +141,7 @@ fi
 ######################################################################
 # build and invoke expect script to build and sign src.rpm with no prompt
 #
-a8_build_signed_rpm(){
+b58_build_signed_rpm(){
 
 expect -c "
   set timeout -1
@@ -134,16 +156,15 @@ expect -c "
 # main routine begins here
 #
 me=${0##*/}
-myver=v1.1
+myver=v1.2
 
 # find the package .spec file
 if [ -z "$1" ]; then
-  herespec=$(ls *.spec 2>&1)
-  if [ "$(echo $herespec | wc -w)" == "1" ]; then
-    pkg=${herespec%.spec}
-  else
+  if [ "$(find . -maxdepth 1 -name "*.spec" | wc -w)" == "0" ]; then
     echo "$me what? (no .spec file here)"
     exit 1
+  else
+    pkg=${PWD##*/}
   fi
 elif [ -f "$mygithub/$1/$1.spec" ]; then
   pkg=$1
@@ -158,20 +179,10 @@ repostage=/stage/testing/SRPMS/.
 
 a1_setup_temp_stuff
 
-a2_clone_git_to_temp
+a3_clone_git_to_temp
 
-a4_use_existing_src_rpm
+for specfile in $(ls $gspecdir/*.spec); do
+  a5_create_src_rpm
+done
 
-a6_get_external_sources
-
-a7_trim_clamav
-
-a8_build_signed_rpm
-
-if [ -f "$srcrpm" ]; then
-  scp -p -P 17132 $srcrpm $myrepouser@$repohost:$repostage 2>/dev/null
-  exit 0
-else
-  echo "$me - $srcrpm not found, not copied to repo staging"
-  exit 1
-fi
+exit 0
