@@ -172,7 +172,7 @@ if [ -z "$1" ]; then
 elif [ -f "$mygithub/$1/$1.spec" ]; then
   pkg=$1
 else
-  echo "$me - $pkg not found"
+  echo "$me - $1 not found"
   exit 1
 fi
 
