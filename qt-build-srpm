@@ -55,10 +55,13 @@ fi
 }
 
 ######################################################################
-# use an existing src rpm file if one exists
+# build an src.rpm file from the .spec file
 #
 
 a5_create_src_rpm(){
+
+pkg=${specfile##*/}
+pkg=${pkg%.spec}
 
 b52_use_existing_src_rpm
 
