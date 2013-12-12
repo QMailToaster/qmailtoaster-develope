@@ -9,38 +9,53 @@
 ######################################################################
 
 # change my* variables appropriately. Nothing else should be changed.
+mygithub=~/github
 mygpgpass="use your gpg key pass"
 myrepouser=shubes-stage
 myidfile=~/.ssh/id_rsa-noarch.pub
-status=testing
 
 ######################################################################
-# set tempfile name for the spec file
+# set temp name for the git clone
 #
 a1_setup_temp_stuff(){
 
-tempfile=$(tempfile 2>/dev/null)  || tempfile=/tmp/$me.$$
+tempgit=$(tempfile 2>/dev/null)  || tempgit=/tmp/$me.$$
 
 # make sure the temp stuff is deleted when we're done
-trap "rm -rf $tempfile" 0 1 2 5 15
+trap "rm -rf $tempgit" 0 1 2 5 15
 }
+######################################################################
+# clone the git repo to a temporary directory,
+#
+a2_clone_git_to_temp(){
 
+mkdir $tempgit
+# git 1.8.5 will have a -C option. 'til then, we need to cd to the target
+savepwd=$PWD
+cd $tempgit
+git clone https://github.com/QMailToaster/$pkg
+cd $savepwd
+
+gspecdir=$tempgit/$pkg
+specfile=$gspecdir/$pkg.spec
+
+if [ ! -f "$specfile" ]; then
+  echo "$me - unable to clone git repo, no spec file - terminating"
+  exit 1
+fi
+}
 
 ######################################################################
 # check to see if the package is a noarch package
-#e
-a2_check_pkg-type(){
+# 
+a3_check_pkg-type(){
 
-echo "$me - checking $pkg ..."
+grep --max-count=1 ^BuildArch $gspecdir/$pkg.spec | grep --quiet noarch
 
-wget -O $tempfile --no-check-certificate https://raw.github.com/QMailToaster/$pkg/master/$pkg.spec 2>/dev/null 
-
-grep -m 1 ^BuildArch $tempfile | grep -q noarch
 if [ $? -ne 0 ]; then
   echo "$me - \"BuildArch: nodist\" tag not found in $pkg.spec file"
   exit 1
 fi
-
 }
 
 ######################################################################
@@ -49,16 +64,16 @@ fi
 a4_get_src_rpm(){
 
 read vertag version anythingleft <<!EOF!
-$(grep --max-count=1 "^Version:" $tempfile)
+$(grep --max-count=1 "^Version:" $specfile)
 !EOF!
 
 read reltag relstring anythingleft <<!EOF!
-$(grep --max-count=1 "^Release:" $tempfile)
+$(grep --max-count=1 "^Release:" $specfile)
 !EOF!
 release=$(echo $relstring | sed -e "s|%{?dist}|$repotag|")
 
-srcname=$pkg-$version-$release.src.rpm
-src=$srcrpmdir/$srcrpmname
+pkgverrel=$pkg-$version-$release
+srcname=$pkgverrel.src.rpm
 
 echo "$me - processing $srcname"
 
@@ -77,13 +92,13 @@ fi
 #
 a6_build_signed_rpm(){
 
-logfile=$logdir/$pkgverrel$dist.$arch.log
+logfile=$logdir/$pkgverrel.$dist.$arch.buildlog.txt
 rm -f $logfile
 
 expect -c "
   set timeout -1
   log_file $logfile
-  spawn rpmbuild --rebuild --define \"dist $repotag$dist\" --sign $srpmfile
+  spawn rpmbuild --rebuild --define \"dist $repotag.$dist\" --sign $srpmfile
   expect {
     phrase:  { send \"$mygpgpass\r\"; exp_continue }
   }
@@ -133,30 +148,38 @@ if [ -z "$1" ]; then
 elif [ -f "$mygithub/$1/$1.spec" ]; then
   pkg=$1
 else
-  echo "$me - $pkg not found"
+  echo "$me - $1 not found"
   exit 1
 fi
 
-a1_setup_temp_stuff
-a2_check_pkg-type
-a4_get_src_rpm
+echo "$me - processing $pkg ..."
 
-webmirror=http://mirror1.qmailtoaster.com
-repotag=".qt"
-repohost=masterepo.qmailtoaster.com
-srcrpmdir="$(rpm --eval='%{_srcrpmdir}')"
+# define constants
+status=testing
 dist=nodist
 arch=noarch
+repotag=".qt"
+repohost=masterepo.qmailtoaster.com
+webmirror=http://mirror1.qmailtoaster.com
+srcrpmdir="$(rpm --eval='%{_srcrpmdir}')"
 logdir="$(rpm --eval='%{_topdir}')/BUILDLOGS"
 mkdir -p $logdir
+
+a1_setup_temp_stuff
+
+a2_clone_git_to_temp
+
+a3_check_pkg-type
+
+a4_get_src_rpm
 
 a6_build_signed_rpm
 
 a8_upload_resulting_rpms
 
 if [ -f $logfile ]; then
-  :
-# TODO: post log file to github
+  scp -p -P 17132 $logfile $myrepouser@$repohost:$repostage/.
+  rm $logfile
 fi
 
 echo "$me - done"
