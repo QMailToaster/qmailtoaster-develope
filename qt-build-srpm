@@ -14,7 +14,7 @@
 # 11/25/13 shubes - created
 # TODOs:
 # .) check mygithub for uncommitted changes
-# .) check mygithub SHA against lastest SHA on github.com
+# .) check mygithub SHA against lastest SHA on github.com (unpushed commits)
 #    e.g. https://api.github.com/repos/QmailToaster/qmailtoaster-build/commits
 ######################################################################
 
