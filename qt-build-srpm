@@ -4,6 +4,7 @@
 # Build QMailToaster srpm file
 ######################################################################
 # Change Log
+# 12/14/13 shubes - don't overlay github from existing srpm
 # 12/05/13 shubes - added multiple specs per repo for qmailadmin-spambox
 # 12/03/13 shubes - removed win32 from clamav source
 # 12/02/13 shubes - fixed up 'expect' code
@@ -93,16 +94,18 @@ $(grep --max-count=1 "^Release:" $specfile)
 !EOF!
 release=$(echo $relstring | sed -e "s|%{?dist}|$repotag|")
 
+# we only want to get the external sources from the existing srpm,
+# not the spec or github sources
 srcrpmname=$pkg-$version-$release.src.rpm
 srcrpm=$(rpm --eval='%{_srcrpmdir}')/$srcrpmname
 if [ -f "$srcrpm" ]; then
-  rpm -ivh --define "_sourcedir $gspecdir" $srcrpm
+  rpm -ivh $srcrpm
 fi
 }
 
 ######################################################################
 # get sources from their internet locations
-# we bypass getting files we already have from the src rpm file
+# we take them from the local sourcedir if they exist there
 #
 b54_get_external_sources(){
 
@@ -112,11 +115,16 @@ while read srctag srcval anythingleft; do
   if [ -z "$srcval" ]; then
     break
   fi
-  if [ ! -f "$gspecdir/${srcval##*/}" ]; then
-    srcstring=${srctag%:}
-    srcnum=${srcstring#Source}
-    echo "$me getting source $srcnum"
-    spectool --get-files -C $gspecdir --source $srcnum $specfile
+  srcname=${srcval##*/}
+  if [ ! -f "$gspecdir/$srcname" ]; then
+    if [ -f "$sourcedir/$srcname" ]; then
+      cp -p $sourcedir/$srcname $gspecdir/$srcname
+    else
+      srcstring=${srctag%:}
+      srcnum=${srcstring#Source}
+      echo "$me getting source $srcnum"
+      spectool --get-files -C $gspecdir --source $srcnum $specfile
+    fi
   fi
 done <<!EOF!
 $(spectool --list-files $specfile)
@@ -179,6 +187,7 @@ fi
 repotag=.qt
 repohost=masterepo.qmailtoaster.com
 repostage=/stage/testing/SRPMS/.
+sourcedir=$(rpm --eval='%{_sourcedir}')
 
 a1_setup_temp_stuff
 
