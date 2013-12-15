@@ -44,13 +44,14 @@ mkdir $tempgit
 # git 1.8.5 will have a -C option. 'til then, we need to cd to the target
 savepwd=$PWD
 cd $tempgit
-git clone https://github.com/QMailToaster/$pkg
+git clone https://github.com/QMailToaster/$grepo
 cd $savepwd
 
-gspecdir=$tempgit/$pkg
+gspecdir=$tempgit/$grepo
 
-if [ ! -f "$gspecdir/$pkg.spec" ]; then
+if [ ! -d "$gspecdir/.git" ]; then
   echo "$me - unable to clone git repo - terminating"
+  echo "$me - looking for $gspecdir/.git"
   exit 1
 fi
 }
@@ -169,19 +170,24 @@ expect -c "
 me=${0##*/}
 myver=v1.2
 
-# find the package .spec file
+# find the package .spec file and grepo name
 if [ -z "$1" ]; then
-  if [ "$(find . -maxdepth 1 -name "*.spec" | wc -w)" == "0" ]; then
+  if [ -f "*.spec" ]; then
+    grepo=${PWD##*/}
+  else
     echo "$me what? (no .spec file here)"
     exit 1
-  else
-    pkg=${PWD##*/}
   fi
-elif [ -f "$mygithub/$1/$1.spec" ]; then
-  pkg=$1
 else
-  echo "$me - $1 not found"
-  exit 1
+  specname=$1.spec
+  specfile="$(find $mygithub -maxdepth 2 -name "$specname" -print -quit)"
+  if [ -z "$specfile" ]; then
+    echo "$me - $specname not found within $mygithub"
+    exit 1
+  else
+    grepo=${specfile%/$specname}
+    grepo=${grepo##*/}
+  fi
 fi
 
 repotag=.qt
