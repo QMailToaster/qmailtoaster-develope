@@ -4,6 +4,7 @@
 # Build QMailToaster srpm file
 ######################################################################
 # Change Log
+# 12/15/13 shubes - cleaned up input parameter, multi-spec process
 # 12/14/13 shubes - don't overlay github from existing srpm
 # 12/05/13 shubes - added multiple specs per repo for qmailadmin-spambox
 # 12/03/13 shubes - removed win32 from clamav source
@@ -25,20 +26,37 @@ mygpgpass="use your gpg key pass"
 myrepouser=shubes-stage
 
 ######################################################################
-# set tempgit name for the git clone
+# find the grepo (git repo) name
 #
-a1_setup_temp_stuff(){
+a1_find_git_repo_name(){
 
-tempgit=$(tempfile 2>/dev/null)  || tempgit=/tmp/$me.$$
-
-# make sure the temp stuff is deleted when we're done
-trap "rm -rf $tempgit" 0 1 2 5 15
+if [ -z "$1" ]; then
+  if [ -z "ls *.spec 2>/dev/null" ]; then
+    echo "$me what? (no .spec file here)"
+    exit 1
+  else
+    grepo=${PWD##*/}
+  fi
+else
+  specfile="$(find $mygithub/$1 -maxdepth 1 -name "*.spec" -print -quit)"
+  if [ -z "$specfile" ]; then
+    echo "$me - .spec file not found within $mygithub/$1"
+    exit 1
+  else
+    grepo=$1
+  fi
+fi
 }
 
 ######################################################################
 # clone the git repo to a temporary directory,
 #
 a3_clone_git_to_temp(){
+
+tempgit=$(tempfile 2>/dev/null)  || tempgit=/tmp/$me.$$
+
+# make sure the temp stuff is deleted when we're done
+trap "rm -rf $tempgit" 0 1 2 5 15
 
 mkdir $tempgit
 # git 1.8.5 will have a -C option. 'til then, we need to cd to the target
@@ -51,7 +69,6 @@ gspecdir=$tempgit/$grepo
 
 if [ ! -d "$gspecdir/.git" ]; then
   echo "$me - unable to clone git repo - terminating"
-  echo "$me - looking for $gspecdir/.git"
   exit 1
 fi
 }
@@ -168,34 +185,14 @@ expect -c "
 # main routine begins here
 #
 me=${0##*/}
-myver=v1.2
-
-# find the package .spec file and grepo name
-if [ -z "$1" ]; then
-  if [ -f "*.spec" ]; then
-    grepo=${PWD##*/}
-  else
-    echo "$me what? (no .spec file here)"
-    exit 1
-  fi
-else
-  specname=$1.spec
-  specfile="$(find $mygithub -maxdepth 2 -name "$specname" -print -quit)"
-  if [ -z "$specfile" ]; then
-    echo "$me - $specname not found within $mygithub"
-    exit 1
-  else
-    grepo=${specfile%/$specname}
-    grepo=${grepo##*/}
-  fi
-fi
+myver=v1.3
 
 repotag=.qt
 repohost=masterepo.qmailtoaster.com
 repostage=/stage/testing/SRPMS/.
 sourcedir=$(rpm --eval='%{_sourcedir}')
 
-a1_setup_temp_stuff
+a1_find_git_repo_name $1
 
 a3_clone_git_to_temp
 
