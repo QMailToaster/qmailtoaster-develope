@@ -12,7 +12,7 @@
 mygithub=~/github
 mygpgpass="use your gpg key pass"
 myrepouser=shubes-stage
-myidfile=~/.ssh/id_rsa-noarch.pub
+myidfile=~/.ssh/id_rsa-noarch
 
 ######################################################################
 # set temp name for the git clone
