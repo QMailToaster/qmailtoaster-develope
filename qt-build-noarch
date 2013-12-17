@@ -123,7 +123,7 @@ while read wrotestring; do
   rpmfile=${rpmfile%.rpm*}
   rpmfile=${rpmfile}.rpm
   if [ ! -z "$rpmfile" ]; then
-    scp -p -P 17132 $rpmfile $myrepouser@$repohost:$repostage/.
+    scp -p -P 17132 -i $myidfile $rpmfile $myrepouser@$repohost:$repostage/.
     rm $rpmfile
   fi
 done << !EOF!
@@ -178,7 +178,7 @@ a6_build_signed_rpm
 a8_upload_resulting_rpms
 
 if [ -f $logfile ]; then
-  scp -p -P 17132 $logfile $myrepouser@$repohost:$repostage/.
+  scp -p -P 17132 -i $myidfile $logfile $myrepouser@$repohost:$repostage/.
   rm $logfile
 fi
 
