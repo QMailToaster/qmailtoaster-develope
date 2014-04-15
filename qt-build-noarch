@@ -48,12 +48,12 @@ fi
 ######################################################################
 # check to see if the package is a noarch package
 # 
-a3_check_pkg-type(){
+a3_check_pkg_type(){
 
 grep --max-count=1 ^BuildArch $gspecdir/$pkg.spec | grep --quiet noarch
 
 if [ $? -ne 0 ]; then
-  echo "$me - \"BuildArch: nodist\" tag not found in $pkg.spec file"
+  echo "$me - \"BuildArch: noarch\" tag not found in $pkg.spec file"
   exit 1
 fi
 }
@@ -169,7 +169,7 @@ a1_setup_temp_stuff
 
 a2_clone_git_to_temp
 
-a3_check_pkg-type
+a3_check_pkg_type
 
 a4_get_src_rpm
 
