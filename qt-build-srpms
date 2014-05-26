@@ -4,6 +4,7 @@
 # Build QMailToaster srpm file
 ######################################################################
 # Change Log
+# 05/26/14 shubes - removed test, unit_tests from clamav source
 # 12/15/13 shubes - cleaned up input parameter, multi-spec process
 # 12/14/13 shubes - don't overlay github from existing srpm
 # 12/05/13 shubes - added multiple specs per repo for qmailadmin-spambox
@@ -157,7 +158,9 @@ b56_trim_clamav(){
 if [ "$pkg" == clamav ]; then
   if [ -f "$gspecdir/clamav-$version.tar.gz" ]; then
     tar -C $gspecdir -xzf $gspecdir/clamav-$version.tar.gz
-    rm -rf $gspecdir/clamav-$version/win32
+    rm -rf $gspecdir/clamav-$version/win32 \
+           $gspecdir/clamav-$version/test \
+           $gspecdir/clamav-$version/unit_tests
     tar -C $gspecdir -czf $gspecdir/clamav-$version.tar.gz clamav-$version
   else
     echo "$me - $gspecdir/clamav-$version.tar.gz not found"
